@@ -320,6 +320,134 @@ def _build_config_parser(subparsers) -> None:
     p.set_defaults(func=_run_config)
 
 
+def _build_watch_parser(subparsers) -> None:
+    p = subparsers.add_parser(
+        "watch",
+        help="Monitor a directory and automatically process new videos",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=(
+            "Watch a directory for new video files and automatically run the\n"
+            "captioning pipeline on each one.\n\n"
+            "Steps (--steps): transcribe, optimize, translate, synthesize, all\n"
+            "  transcribe — ASR: audio → subtitle\n"
+            "  optimize   — LLM: fix errors / punctuation\n"
+            "  translate  — translate subtitles to target language\n"
+            "  synthesize — burn subtitles into video\n"
+            "  all        — all four steps\n\n"
+            "Condition (--condition): when to translate\n"
+            "  always          always translate (default)\n"
+            "  never           skip translation\n"
+            "  non-cjk         not Chinese/Japanese/Korean\n"
+            "  non-zh          not Chinese\n"
+            "  is-en           only English\n"
+            "  \"is-en or is-ja\" English or Japanese\n\n"
+            "Run without a directory (or with --interactive) to start the\n"
+            "configuration wizard.\n\n"
+            "Management sub-commands:\n"
+            "  videocaptioner watch stop              Stop the background daemon\n"
+            "  videocaptioner watch status            Show queue + daemon status\n"
+            "  videocaptioner watch logs [--last N]   Tail the daemon log\n"
+            "  videocaptioner watch bump <file> [--priority N]\n"
+            "  videocaptioner watch reset <file>      Reset a task to pending"
+        ),
+    )
+
+    # Single optional positional: either a sub-command keyword or a directory path.
+    # Sub-commands: stop | status | logs | bump <file> | reset <file>
+    # We use two optional positionals so bump/reset can accept a file path.
+    p.add_argument(
+        "target",
+        nargs="?",
+        metavar="DIR|ACTION",
+        help="Directory to watch, or one of: stop, status, logs, bump, reset",
+    )
+    p.add_argument(
+        "target_file",
+        nargs="?",
+        metavar="FILE",
+        help=argparse.SUPPRESS,  # only used by bump/reset
+    )
+
+    _add_common_options(p)
+
+    watch_opts = p.add_argument_group("Watch options")
+    watch_opts.add_argument(
+        "--steps",
+        nargs="+",
+        metavar="STEP",
+        help="Processing steps: transcribe optimize translate synthesize all "
+             "(default: transcribe optimize translate)",
+    )
+    watch_opts.add_argument(
+        "--condition",
+        metavar="EXPR",
+        help="When to translate (default: always). "
+             "Examples: non-cjk  |  is-en  |  \"is-en or is-ja\"",
+    )
+    watch_opts.add_argument(
+        "--target-language",
+        metavar="CODE",
+        help="Translation target language BCP 47 code (default: zh-Hans)",
+    )
+    watch_opts.add_argument(
+        "--interval",
+        type=int,
+        metavar="SECS",
+        help="Directory scan interval in seconds (default: 60, 0=one-shot)",
+    )
+    watch_opts.add_argument(
+        "-o", "--output",
+        metavar="DIR",
+        help="Output directory for subtitles/videos (default: same as video)",
+    )
+    watch_opts.add_argument(
+        "--db",
+        metavar="PATH",
+        help="SQLite task database path",
+    )
+    watch_opts.add_argument(
+        "--no-recursive",
+        action="store_true",
+        help="Do not scan subdirectories",
+    )
+    watch_opts.add_argument(
+        "--priority",
+        type=int,
+        default=100,
+        metavar="N",
+        help="Priority for bump sub-command (default: 100, higher = sooner)",
+    )
+    watch_opts.add_argument(
+        "--last",
+        type=int,
+        default=0,
+        metavar="N",
+        help="For logs sub-command: show last N lines (default: follow/tail)",
+    )
+
+    mode_group = p.add_mutually_exclusive_group()
+    mode_group.add_argument(
+        "-d", "--daemon",
+        action="store_true",
+        help="Run in background (daemon mode); log to file",
+    )
+    mode_group.add_argument(
+        "--foreground",
+        action="store_true",
+        help="Force foreground mode (overrides saved daemon=true)",
+    )
+    mode_group.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Start the configuration wizard",
+    )
+
+    p.add_argument("--log-file", metavar="PATH", help="Log file path (daemon mode)")
+    p.add_argument("--pid-file", metavar="PATH", help="PID file path (daemon mode)")
+
+    p.set_defaults(func=_run_watch)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="videocaptioner",
@@ -338,6 +466,7 @@ def build_parser() -> argparse.ArgumentParser:
     _build_download_parser(subparsers)
     _build_config_parser(subparsers)
     _build_style_parser(subparsers)
+    _build_watch_parser(subparsers)
 
     return parser
 
@@ -474,6 +603,12 @@ def _run_config(args: argparse.Namespace) -> int:
 
 def _run_style(args: argparse.Namespace) -> int:
     from videocaptioner.cli.commands.style_cmd import run
+    config = _load_config(args)
+    return run(args, config)
+
+
+def _run_watch(args: argparse.Namespace) -> int:
+    from videocaptioner.cli.commands.watch import run
     config = _load_config(args)
     return run(args, config)
 

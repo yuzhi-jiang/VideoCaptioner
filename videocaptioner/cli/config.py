@@ -98,6 +98,18 @@ DEFAULTS: Dict[str, Any] = {
     "output": {
         "format": "srt",
     },
+    "watch": {
+        "directory": "",
+        "steps": ["transcribe", "optimize", "translate"],
+        "condition": "always",
+        "target_lang": "zh-Hans",
+        "interval": 60,
+        "daemon": False,
+        "log_file": "",
+        "pid_file": "",
+        "db_path": "",
+        "output_dir": "",
+    },
 }
 
 
