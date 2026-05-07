@@ -151,8 +151,10 @@ class TestDatabase:
         task = taskdb.get_next_task(conn)
         assert task is not None
         assert task["file_path"] == "/a.mp4"
-        assert task["status"] == "pending"  # was pending before fetch
-        # After fetch it should be processing in DB
+        # The returned dict reflects the row before the status update,
+        # so status is still 'pending' in the returned snapshot.
+        assert task["status"] == "pending"
+        # After fetch, the DB row is marked as processing
         row = conn.execute("SELECT status FROM tasks WHERE file_path=?", ("/a.mp4",)).fetchone()
         assert row["status"] == "processing"
 

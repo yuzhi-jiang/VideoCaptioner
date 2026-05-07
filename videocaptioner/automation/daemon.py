@@ -149,8 +149,9 @@ def _redirect_streams(log_file: Path) -> None:
 
     # Replace sys streams so Python print() also goes to the log
     sys.stdin  = open(os.devnull, "r")   # noqa: SIM115
+    new_log_fd = os.open(str(log_file), os.O_WRONLY | os.O_APPEND)
     sys.stdout = io.TextIOWrapper(       # noqa: SIM115
-        open(log_fd := os.open(str(log_file), os.O_WRONLY | os.O_APPEND), "wb"),
+        open(new_log_fd, "wb"),
         line_buffering=True,
     )
     sys.stderr = sys.stdout
@@ -165,7 +166,7 @@ def _daemonize_windows(log_file: Path, pid_file: Path) -> None:
     flags = CREATE_NO_WINDOW | DETACHED_PROCESS
 
     log_file.parent.mkdir(parents=True, exist_ok=True)
-    log_handle = open(str(log_file), "a")  # noqa: SIM115
+    log_handle = open(str(log_file), "a", encoding="utf-8")  # noqa: SIM115
 
     # Re-run with --foreground so the child doesn't fork again
     argv: List[str] = sys.argv[:]
@@ -184,6 +185,7 @@ def _daemonize_windows(log_file: Path, pid_file: Path) -> None:
         creationflags=flags,
         close_fds=True,
     )
+    log_handle.close()
     pid_file.parent.mkdir(parents=True, exist_ok=True)
     pid_file.write_text(str(proc.pid))
     print(f"  Daemon started (PID {proc.pid})", file=sys.stderr)
